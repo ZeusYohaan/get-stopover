@@ -107,8 +107,11 @@ def get_flights(
 
 
 def parse_response(
-    r: Response, *, dangerously_allow_looping_last_item: bool = False
-) -> Result:
+    r: Response,
+    data_source: DataSource,
+    *,
+    dangerously_allow_looping_last_item: bool = False,
+) -> Union[Result, DecodedResult, None]:
     class _blank:
         def text(self, *_, **__):
             return ""
@@ -122,6 +125,15 @@ def parse_response(
         return n or blank
 
     parser = LexborHTMLParser(r.text)
+
+    if data_source == 'js':
+        script = parser.css_first(r'script.ds\:1').text()
+
+        match = re.search(r'^.*?\{.*?data:(\[.*\]).*\}', script)
+        assert match, 'Malformed js data, cannot find script data'
+        data = json.loads(match.group(1))
+        return ResultDecoder.decode(data) if data is not None else None
+
     flights = []
 
     for i, fl in enumerate(parser.css('div[jsname="IWWDBc"], div[jsname="YdtKid"]')):
