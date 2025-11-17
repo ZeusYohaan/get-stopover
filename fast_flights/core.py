@@ -107,11 +107,8 @@ def get_flights(
 
 
 def parse_response(
-    r: Response,
-    data_source: DataSource,
-    *,
-    dangerously_allow_looping_last_item: bool = False,
-) -> Union[Result, DecodedResult, None]:
+    r: Response, *, dangerously_allow_looping_last_item: bool = False
+) -> Result:
     class _blank:
         def text(self, *_, **__):
             return ""
@@ -125,15 +122,6 @@ def parse_response(
         return n or blank
 
     parser = LexborHTMLParser(r.text)
-
-    if data_source == 'js':
-        script = parser.css_first(r'script.ds\:1').text()
-
-        match = re.search(r'^.*?\{.*?data:(\[.*\]).*\}', script)
-        assert match, 'Malformed js data, cannot find script data'
-        data = json.loads(match.group(1))
-        return ResultDecoder.decode(data) if data is not None else None
-
     flights = []
 
     for i, fl in enumerate(parser.css('div[jsname="IWWDBc"], div[jsname="YdtKid"]')):
@@ -163,6 +151,10 @@ def parse_response(
             # Get duration
             duration = safe(item.css_first("li div.Ak5kof div")).text()
 
+            # Get stopover
+            stopover_el = item.css_first('.sSHqwe.tPgKwe.ogfYpf[aria-label]')
+            stopover_text = stopover_el.attributes.get("aria-label") if stopover_el else None
+
             # Get flight stops
             stops = safe(item.css_first(".BbR8Ec .ogfYpf")).text()
 
@@ -187,6 +179,7 @@ def parse_response(
                     "arrival_time_ahead": time_ahead,
                     "duration": duration,
                     "stops": stops_fmt,
+                    "stopover": stopover_text,
                     "delay": delay,
                     "price": price.replace(",", ""),
                 }
